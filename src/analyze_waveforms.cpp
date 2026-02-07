@@ -358,10 +358,21 @@ int main(int argc, char *argv[]) {
   int invalid_count = 0;
   int disabled_count = 0;
   int saved_canvases = 0;
+  int processed_unique_events = 0;
+  int last_evtn = std::numeric_limits<int>::min();
 
   for (const auto &kv : entry_map) {
     tree->GetEntry(kv.second);
     const EntryKey &key = kv.first;
+    if (key.evtn != last_evtn) {
+      last_evtn = key.evtn;
+      processed_unique_events++;
+      if ((processed_unique_events % 1000) == 0) {
+        std::cout << "Processing event " << processed_unique_events
+                  << " / " << selected_evtn.size()
+                  << " (evtn=" << key.evtn << ")" << std::endl;
+      }
+    }
     const ResolvedAnalysisParams params = resolveAnalysisParams(config, key.det, key.ch);
     const WaveformAnalysisResult result = analyzeWaveform(wf, nsample, params);
 

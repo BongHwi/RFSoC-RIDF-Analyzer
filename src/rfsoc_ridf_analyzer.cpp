@@ -3,12 +3,15 @@
 #include <cstdlib>
 #include <algorithm>
 #include <array>
+#include <csignal>
 #include <getopt.h>
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <poll.h>
 #include <set>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include <TApplication.h>
@@ -23,15 +26,24 @@
 
 #include "RIDFParser.h"
 
+// SIGINT 핸들러 (온라인 모드 graceful shutdown)
+static volatile sig_atomic_t g_stop_requested = 0;
+
+void sigint_handler(int sig) {
+  (void)sig;
+  g_stop_requested = 1;
+}
+
 void print_usage(const char *progname) {
-  std::cout << "Usage: " << progname << " [OPTIONS] <input.ridf>" << std::endl;
+  std::cout << "Usage: " << progname << " [OPTIONS] <input.ridf | hostname>" << std::endl;
   std::cout << "Options:" << std::endl;
   std::cout << "  -o, --output FILE    Output ROOT file (default: rfsoc_ridf_analyzer_out.root)" << std::endl;
-  std::cout << "  -n, --maxevt N       Maximum events to process (default: 10000)" << std::endl;
+  std::cout << "  -n, --maxevt N       Maximum events to process (0=unlimited, default: 10000)" << std::endl;
   std::cout << "  -b, --batch          Run in batch mode (no GUI)" << std::endl;
   std::cout << "  -a, --all            Draw all RFSoCs in one monitor canvas (GUI only)" << std::endl;
-  std::cout << "                      GUI mode updates waveform monitor per event" << std::endl;
-  std::cout << "                      (Enter: next event, q: quit monitor)" << std::endl;
+  std::cout << "  -l, --online         Online mode (input is hostname/IP)" << std::endl;
+  std::cout << "                       GUI: auto-advance, type 'q'+Enter to quit" << std::endl;
+  std::cout << "                       Batch: use Ctrl+C to stop" << std::endl;
   std::cout << "  -h, --help           Show this help message" << std::endl;
 }
 
@@ -289,7 +301,7 @@ void update_event_monitor(MonitorState &monitor, const EventWaveforms &event_wav
 
 bool wait_for_monitor_input(int shown_evt_count, int evtn) {
   std::cout << "[Monitor] Shown event " << shown_evt_count << " (evtn=" << evtn
-            << ")  Enter: next, q: quit > " << std::flush;
+            << ")  Enter: next, q+Enter: quit > " << std::flush;
 
   std::string line;
   if (!std::getline(std::cin, line)) {
@@ -300,10 +312,54 @@ bool wait_for_monitor_input(int shown_evt_count, int evtn) {
   return !(line == "q" || line == "Q");
 }
 
+// 온라인 GUI 모드용: stdin에서 'q' 입력 체크 (비차단)
+bool check_quit_input() {
+  struct pollfd fds[1];
+  fds[0].fd = STDIN_FILENO;
+  fds[0].events = POLLIN;
+
+  if (poll(fds, 1, 0) > 0) {  // timeout=0: 즉시 반환
+    if (fds[0].revents & POLLIN) {
+      char buf[16];
+      ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
+      if (n > 0) {
+        buf[n] = '\0';
+        for (ssize_t i = 0; i < n; i++) {
+          if (buf[i] == 'q' || buf[i] == 'Q') {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 void run_analysis(const std::string &infile, int maxevt, const std::string &outfile,
-                  bool enable_monitor, MonitorLayoutMode layout_mode) {
+                  bool enable_monitor, MonitorLayoutMode layout_mode, bool online_mode) {
   RIDFParser *p = new RIDFParser();
-  p->file(infile.c_str());
+
+  if (online_mode) {
+    p->online(infile.c_str());
+    std::cout << "Online mode: connecting to " << infile << std::endl;
+  } else {
+    if (p->file(infile.c_str()) < 0) {
+      std::cerr << "Error: Cannot open file " << infile << std::endl;
+      delete p;
+      return;
+    }
+  }
+
+  // TFile을 루프 시작 전에 열기 (AutoSave 지원)
+  TFile *fout = new TFile(outfile.c_str(), "RECREATE");
+  if (!fout || fout->IsZombie()) {
+    std::cerr << "Error: Cannot create output file " << outfile << std::endl;
+    p->close();
+    delete p;
+    if (fout) delete fout;
+    return;
+  }
+  fout->cd();  // gDirectory를 명시적으로 설정
 
   TTree *tree = new TTree("wftree", "Waveform Tree");
   Int_t evtn, det, ch, nsample;
@@ -332,15 +388,39 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
   int raw_evt_count = 0;
   int shown_evt_count = 0;
   bool stop_requested = false;
+  const int autosave_interval = 1000;
 
   std::cout << "Analysis start" << std::endl;
 
-  while ((flag = p->nextevt(&evtn)) >= 0) {
-    if (raw_evt_count >= maxevt || stop_requested)
+  while (true) {
+    // 종료 조건 체크
+    if (g_stop_requested) {
+      std::cout << "\nSIGINT received. Stopping..." << std::endl;
       break;
-    raw_evt_count++;
-    if (flag)
+    }
+    if (stop_requested) break;
+    if (maxevt > 0 && raw_evt_count >= maxevt) break;
+
+    flag = p->nextevt(&evtn);
+
+    if (flag == -2) {
+      if (online_mode) {
+        std::cout << "Connection lost or no more data." << std::endl;
+      }
+      break;  // EOF 또는 연결 종료
+    }
+    if (flag == -3) break;  // 미연결
+
+    if (flag == 1) {  // 데이터 없음
+      if (online_mode) {
+        gSystem->ProcessEvents();
+        usleep(100000);  // 100ms 대기
+      }
       continue;
+    }
+
+    raw_evt_count++;
+    if (flag) continue;
     shown_evt_count++;
 
     EventWaveforms event_waveforms;
@@ -395,28 +475,44 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
 
     if (enable_monitor) {
       update_event_monitor(monitor_state, event_waveforms, layout_mode, evtn);
-      if (!wait_for_monitor_input(shown_evt_count, evtn)) {
-        stop_requested = true;
+      if (online_mode) {
+        // 온라인 GUI: 비차단 입력 체크 + 자동 진행
+        std::cout << "\r[Online] Event " << shown_evt_count
+                  << " (evtn=" << evtn << ") - type 'q'+Enter to quit" << std::flush;
+        if (check_quit_input()) {
+          stop_requested = true;
+        }
+      } else {
+        // 파일 GUI: 기존 Enter 대기
+        if (!wait_for_monitor_input(shown_evt_count, evtn)) {
+          stop_requested = true;
+        }
       }
     }
 
-    if ((shown_evt_count % 1000) == 0) {
+    // 온라인 모드: 주기적 저장
+    if (online_mode && (shown_evt_count % autosave_interval) == 0) {
+      tree->AutoSave("SaveSelf");
+      std::cout << "\n[AutoSave] " << shown_evt_count << " events saved" << std::endl;
+    }
+
+    if (!online_mode && (shown_evt_count % 1000) == 0) {
       std::cout << "Processing shown event " << shown_evt_count << " (evtn=" << evtn << ")" << std::endl;
     }
   }
 
   p->close();
-  std::cout << "Analysis done: " << shown_evt_count << " shown events ("
+  std::cout << "\nAnalysis done: " << shown_evt_count << " shown events ("
             << raw_evt_count << " raw events), " << total_segments
             << " segments, " << total_samples << " total samples, "
             << skipped_ch_out_of_range << " segments skipped (ch outside 0-7)" << std::endl;
 
-  TFile *fout = new TFile(outfile.c_str(), "RECREATE");
+  // 최종 저장
+  fout->cd();
   tree->Write();
   h_adc_dist->Write();
   h_amplitude->Write();
   h_nsample->Write();
-
   fout->Close();
   std::cout << "Output saved to " << outfile << std::endl;
 
@@ -429,18 +525,20 @@ int main(int argc, char *argv[]) {
   int maxevt = 10000;
   bool batch_mode = false;
   bool all_det_in_one_canvas = false;
+  bool online_mode = false;
   std::string infile;
 
   static struct option long_options[] = {{"output", required_argument, 0, 'o'},
                                           {"maxevt", required_argument, 0, 'n'},
                                           {"batch", no_argument, 0, 'b'},
                                           {"all", no_argument, 0, 'a'},
+                                          {"online", no_argument, 0, 'l'},
                                           {"help", no_argument, 0, 'h'},
                                           {0, 0, 0, 0}};
 
   int opt;
   int option_index = 0;
-  while ((opt = getopt_long(argc, argv, "o:n:bah", long_options, &option_index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "o:n:balh", long_options, &option_index)) != -1) {
     switch (opt) {
     case 'o':
       outfile = optarg;
@@ -454,6 +552,9 @@ int main(int argc, char *argv[]) {
     case 'a':
       all_det_in_one_canvas = true;
       break;
+    case 'l':
+      online_mode = true;
+      break;
     case 'h':
       print_usage(argv[0]);
       return 0;
@@ -464,7 +565,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (optind >= argc) {
-    std::cerr << "Error: Input file required" << std::endl;
+    std::cerr << "Error: Input file/hostname required" << std::endl;
     print_usage(argv[0]);
     return 1;
   }
@@ -473,6 +574,11 @@ int main(int argc, char *argv[]) {
   if (batch_mode && all_det_in_one_canvas) {
     std::cerr << "Warning: -a/--all is GUI-only and will be ignored in batch mode." << std::endl;
     all_det_in_one_canvas = false;
+  }
+
+  if (online_mode) {
+    std::signal(SIGINT, sigint_handler);
+    std::cout << "Online mode enabled. Use 'q'+Enter (GUI) or Ctrl+C (batch) to quit." << std::endl;
   }
 
   TApplication *app = nullptr;
@@ -486,7 +592,7 @@ int main(int argc, char *argv[]) {
 
   const MonitorLayoutMode layout_mode =
       all_det_in_one_canvas ? MonitorLayoutMode::AllDetSingleCanvas : MonitorLayoutMode::PerDetCanvas;
-  run_analysis(infile, maxevt, outfile, !batch_mode, layout_mode);
+  run_analysis(infile, maxevt, outfile, !batch_mode, layout_mode, online_mode);
 
   if (!batch_mode) {
     std::cout << "GUI monitor finished." << std::endl;

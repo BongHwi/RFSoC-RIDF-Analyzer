@@ -87,11 +87,10 @@ int RIDFPull::infcon(char *host){
 
   /* Connect to babild */
   if(!(infsock = mktcpsend(host, INFCOMPORT))){
-    printf("Can't connet to babinfo.\n");
-    exit(0);
-    return 0;
+    printf("Can't connect to babinfo.\n");
+    return 0;  // 연결 실패 시 0 반환 (exit(0) 제거)
   }
-  
+
   return infsock;
 }
 
