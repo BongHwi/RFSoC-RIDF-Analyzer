@@ -353,7 +353,8 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
       int idx = 0;
       while (p->nextdata(seg, data) >= 0) {
         if (idx < 4096) {
-          wf[idx++] = (Short_t)data[3];
+          const Short_t raw = static_cast<Short_t>(data[3]);
+          wf[idx++] = static_cast<Short_t>(raw >> 4);
         }
       }
       nsample = idx;
