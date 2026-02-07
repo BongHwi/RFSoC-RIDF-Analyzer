@@ -37,8 +37,10 @@ This repository is managed for source-code distribution.
 
 ## Build
 
+`<repo-root>` means the top-level directory of this repository.
+
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+cd <repo-root>
 mkdir -p build
 cd build
 cmake ..
@@ -48,7 +50,7 @@ cmake --build . -j$(nproc)
 With custom ROOT path:
 
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer/build
+cd <repo-root>/build
 cmake -DROOT_DIR=/opt/root ..
 cmake --build . -j$(nproc)
 ```
@@ -58,21 +60,21 @@ cmake --build . -j$(nproc)
 ### Help
 
 ```bash
-/home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer/bin/rfsoc_ridf_analyzer --help
-/home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer/bin/export_waveforms --help
+./bin/rfsoc_ridf_analyzer --help
+./bin/export_waveforms --help
 ```
 
 ### Batch mode (recommended for servers)
 
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+cd <repo-root>
 ./bin/rfsoc_ridf_analyzer -b -n 1000 data.ridf
 ```
 
 ### GUI mode
 
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+cd <repo-root>
 ./bin/rfsoc_ridf_analyzer -n 1000 data.ridf
 ```
 
@@ -94,14 +96,14 @@ cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
 ### Basic usage
 
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+cd <repo-root>
 ./bin/export_waveforms rfsoc_ridf_analyzer_out.root
 ```
 
 ### Example with image export
 
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+cd <repo-root>
 ./bin/export_waveforms rfsoc_ridf_analyzer_out.root -o waveforms.root --png -n 200
 ```
 
@@ -127,7 +129,7 @@ Output ROOT file directory hierarchy:
 Check ROOT output content:
 
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+cd <repo-root>
 root -l -b -q -e 'TFile f("rfsoc_ridf_analyzer_out.root"); f.ls(); TTree *t=(TTree*)f.Get("wftree"); if(t) t->Print();'
 ```
 
@@ -142,7 +144,7 @@ Expected objects include:
 ## Clean/Rebuild
 
 ```bash
-cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+cd <repo-root>
 rm -rf build
 mkdir build && cd build
 cmake ..
