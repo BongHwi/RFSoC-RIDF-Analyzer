@@ -256,10 +256,10 @@ int main(int argc, char *argv[]) {
 
     TDirectory *targetDir = gDirectory;
 
-    // Image directory
-    std::string imgPath = imgdir + "/" + evtDir + "/" + segDir + "/" + detDir;
+    // Image directory: group by event/detector so segments are not fragmented into many folders.
+    std::string detImgPath = imgdir + "/" + evtDir + "/" + detDir;
     if (export_pdf || export_png) {
-      createDirIfNotExists(imgPath);
+      createDirIfNotExists(detImgPath);
     }
 
     // For summary canvas: store idx0 TGraph for each channel
@@ -300,13 +300,16 @@ int main(int argc, char *argv[]) {
 
         // Export individual graph image
         if (export_pdf || export_png) {
+          std::string chImgPath = detImgPath + "/" + Form("ch_%02d", c);
+          createDirIfNotExists(chImgPath);
+
           TCanvas *gc = new TCanvas("gc", "", 800, 600);
           g->Draw("AL");
           if (export_pdf) {
-            exportToImage(gc, imgPath + "/" + gname, "pdf");
+            exportToImage(gc, chImgPath + "/" + gname, "pdf");
           }
           if (export_png) {
-            exportToImage(gc, imgPath + "/" + gname, "png");
+            exportToImage(gc, chImgPath + "/" + gname, "png");
           }
           delete gc;
         }
@@ -325,10 +328,10 @@ int main(int argc, char *argv[]) {
 
       if (export_pdf || export_png) {
         if (export_pdf) {
-          exportToImage(summary, imgPath + "/" + sname, "pdf");
+          exportToImage(summary, detImgPath + "/" + sname, "pdf");
         }
         if (export_png) {
-          exportToImage(summary, imgPath + "/" + sname, "png");
+          exportToImage(summary, detImgPath + "/" + sname, "png");
         }
       }
       delete summary;
