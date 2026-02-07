@@ -55,6 +55,19 @@ set_target_properties(export_waveforms PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
 )
 
+add_executable(analyze_waveforms
+    src/analyze_waveforms.cpp
+    src/WaveformAnalysis.cpp
+)
+target_include_directories(analyze_waveforms PRIVATE
+    ${ROOT_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/include
+)
+target_link_libraries(analyze_waveforms ${ROOT_LIBRARIES})
+set_target_properties(analyze_waveforms PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+)
+
 add_custom_command(TARGET ridfana POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_CURRENT_BINARY_DIR}/libridfana_rdict.pcm

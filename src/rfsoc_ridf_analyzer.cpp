@@ -306,13 +306,12 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
   p->file(infile.c_str());
 
   TTree *tree = new TTree("wftree", "Waveform Tree");
-  Int_t evtn, segid, det, ch, nsample;
+  Int_t evtn, det, ch, nsample;
   Short_t wf[4096];
   Short_t wf_min, wf_max;
   Float_t wf_mean;
 
   tree->Branch("evtn", &evtn, "evtn/I");
-  tree->Branch("segid", &segid, "segid/I");
   tree->Branch("det", &det, "det/I");
   tree->Branch("ch", &ch, "ch/I");
   tree->Branch("nsample", &nsample, "nsample/I");
@@ -324,13 +323,12 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
   TH1I *h_adc_dist = new TH1I("h_adc_dist", "ADC Distribution;ADC;Counts", 4096, -2048, 2048);
   TH1I *h_amplitude = new TH1I("h_amplitude", "Amplitude Distribution;Amplitude;Counts", 4096, 0, 4096);
   TH1I *h_nsample = new TH1I("h_nsample", "Number of Samples;Samples;Counts", 5000, 0, 5000);
-
-  std::map<int, TH1S *> h_wf_map;
   MonitorState monitor_state;
 
   int flag, seg, data[4];
   int total_segments = 0;
   int total_samples = 0;
+  int skipped_ch_out_of_range = 0;
   int raw_evt_count = 0;
   int shown_evt_count = 0;
   bool stop_requested = false;
@@ -348,11 +346,9 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
     EventWaveforms event_waveforms;
 
     while (!p->nextseg(&seg)) {
-      segid = seg;
       det = p->segdet(seg);
+      ch = p->segfp(seg);
       total_segments++;
-
-      ch = (segid >> 14) & 0xF;
 
       int idx = 0;
       while (p->nextdata(seg, data) >= 0) {
@@ -363,8 +359,13 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
       nsample = idx;
       total_samples += nsample;
 
-      if (nsample == 0)
+      if (nsample == 0) {
         continue;
+      }
+      if (ch < 0 || ch > 7) {
+        skipped_ch_out_of_range++;
+        continue;
+      }
 
       wf_min = 32767;
       wf_max = -32768;
@@ -386,17 +387,7 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
 
       tree->Fill();
 
-      int key = segid & 0xFFFFFF;
-      if (h_wf_map.find(key) == h_wf_map.end()) {
-        h_wf_map[key] = new TH1S(Form("h_wf_seg%06x", key), Form("Waveform Seg 0x%06x;Sample;ADC", key), nsample, 0, nsample);
-      }
-
-      h_wf_map[key]->Reset();
-      for (int i = 0; i < nsample; i++) {
-        h_wf_map[key]->SetBinContent(i + 1, wf[i]);
-      }
-
-      if (enable_monitor && ch >= 0 && ch < 8) {
+      if (enable_monitor) {
         event_waveforms[det][ch].assign(wf, wf + nsample);
       }
     }
@@ -416,17 +407,14 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
   p->close();
   std::cout << "Analysis done: " << shown_evt_count << " shown events ("
             << raw_evt_count << " raw events), " << total_segments
-            << " segments, " << total_samples << " total samples" << std::endl;
+            << " segments, " << total_samples << " total samples, "
+            << skipped_ch_out_of_range << " segments skipped (ch outside 0-7)" << std::endl;
 
   TFile *fout = new TFile(outfile.c_str(), "RECREATE");
   tree->Write();
   h_adc_dist->Write();
   h_amplitude->Write();
   h_nsample->Write();
-
-  for (auto &pair : h_wf_map) {
-    pair.second->Write();
-  }
 
   fout->Close();
   std::cout << "Output saved to " << outfile << std::endl;

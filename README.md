@@ -139,7 +139,6 @@ Expected objects include:
 - `h_adc_dist`
 - `h_amplitude`
 - `h_nsample`
-- `h_wf_seg*` histograms (per segment)
 
 ## Clean/Rebuild
 

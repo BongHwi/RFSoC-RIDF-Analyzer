@@ -162,6 +162,7 @@ int main(int argc, char *argv[]) {
 
   // Statistics
   int skipped_nsample = 0;
+  int skipped_ch_out_of_range = 0;
   int total_tgraphs = 0;
   int duplicate_entries = 0;
   int summary_canvases = 0;
@@ -197,6 +198,10 @@ int main(int argc, char *argv[]) {
     if (nsample <= 0 || nsample > 4096) {
       std::cerr << "Warning: Invalid nsample=" << nsample << " at entry " << i << ", skipping\n";
       skipped_nsample++;
+      continue;
+    }
+    if (ch < 0 || ch > 7) {
+      skipped_ch_out_of_range++;
       continue;
     }
 
@@ -328,6 +333,7 @@ int main(int argc, char *argv[]) {
             << "  Events processed: " << selected_evtn.size() << " (unique evtn values)\n"
             << "  TTree entries scanned: " << nentries << "\n"
             << "  Entries skipped (invalid nsample): " << skipped_nsample << "\n"
+            << "  Entries skipped (ch outside 0-7): " << skipped_ch_out_of_range << "\n"
             << "  Unique (evt,det,ch) keys: " << unique_keys << "\n"
             << "  TGraph objects created: " << total_tgraphs << "\n"
             << "  Duplicate entries handled: " << duplicate_entries << "\n"
