@@ -150,10 +150,9 @@ int main(int argc, char *argv[]) {
   }
 
   // Setup branches
-  Int_t evtn, segid, det, ch, nsample;
+  Int_t evtn, det, ch, nsample;
   Short_t wf[4096];
   tree->SetBranchAddress("evtn", &evtn);
-  tree->SetBranchAddress("segid", &segid);
   tree->SetBranchAddress("det", &det);
   tree->SetBranchAddress("ch", &ch);
   tree->SetBranchAddress("nsample", &nsample);
@@ -182,8 +181,8 @@ int main(int argc, char *argv[]) {
   }
   std::set<int> selected_evtn_set(selected_evtn.begin(), selected_evtn.end());
 
-  // Build eventMap: (evtn, segid, det, ch) -> vector of entry indices
-  using Key = std::tuple<int, int, int, int>;
+  // Build eventMap: (evtn, det, ch) -> vector of entry indices
+  using Key = std::tuple<int, int, int>;
   std::map<Key, std::vector<Long64_t>> eventMap;
 
   for (Long64_t i = 0; i < nentries; i++) {
@@ -201,7 +200,7 @@ int main(int argc, char *argv[]) {
       continue;
     }
 
-    Key key = std::make_tuple(evtn, segid, det, ch);
+    Key key = std::make_tuple(evtn, det, ch);
     eventMap[key].push_back(i);
   }
 
@@ -221,23 +220,19 @@ int main(int argc, char *argv[]) {
     return EXIT_FILE_ERROR;
   }
 
-  // Pass 2: Create TGraphs organized by (evtn, segid, det)
-  // Group by (evtn, segid, det) for summary canvas creation
-  using DetKey = std::tuple<int, int, int>;
+  // Pass 2: Create TGraphs organized by (evtn, det)
+  using DetKey = std::tuple<int, int>;
   std::set<DetKey> detKeys;
   for (const auto &kv : eventMap) {
-    detKeys.insert(std::make_tuple(std::get<0>(kv.first), std::get<1>(kv.first),
-                                   std::get<2>(kv.first)));
+    detKeys.insert(std::make_tuple(std::get<0>(kv.first), std::get<1>(kv.first)));
   }
 
   for (const auto &detKey : detKeys) {
     int evt = std::get<0>(detKey);
-    int seg = std::get<1>(detKey);
-    int d = std::get<2>(detKey);
+    int d = std::get<1>(detKey);
 
     // Create directory hierarchy
     std::string evtDir = Form("evt_%04d", evt);
-    std::string segDir = Form("seg_%06d", seg);
     std::string detDir = Form("det_%02d", d);
 
     fout->cd();
@@ -245,10 +240,6 @@ int main(int argc, char *argv[]) {
       fout->mkdir(evtDir.c_str());
     }
     fout->cd(evtDir.c_str());
-    if (!gDirectory->GetDirectory(segDir.c_str())) {
-      gDirectory->mkdir(segDir.c_str());
-    }
-    gDirectory->cd(segDir.c_str());
     if (!gDirectory->GetDirectory(detDir.c_str())) {
       gDirectory->mkdir(detDir.c_str());
     }
@@ -256,70 +247,61 @@ int main(int argc, char *argv[]) {
 
     TDirectory *targetDir = gDirectory;
 
-    // Image directory: group by event/detector so segments are not fragmented into many folders.
+    // Image directory: event/detector
     std::string detImgPath = imgdir + "/" + evtDir + "/" + detDir;
     if (export_pdf || export_png) {
       createDirIfNotExists(detImgPath);
     }
 
-    // For summary canvas: store idx0 TGraph for each channel
+    // For summary canvas: store channel graph (only ch 0-7 for 2x4 grid)
     std::map<int, TGraph *> summaryGraphs;
 
-    // Collect all channels that exist for this (evtn, segid, det)
+    // Collect all channels that exist for this (evtn, det)
     std::set<int> channels;
     for (const auto &kv : eventMap) {
-      if (std::get<0>(kv.first) == evt && std::get<1>(kv.first) == seg &&
-          std::get<2>(kv.first) == d) {
-        channels.insert(std::get<3>(kv.first));
+      if (std::get<0>(kv.first) == evt && std::get<1>(kv.first) == d) {
+        channels.insert(std::get<2>(kv.first));
       }
     }
 
-    // Process all channels for this (evtn, segid, det)
+    // Process all channels for this (evtn, det)
     for (int c : channels) {
-      Key key = std::make_tuple(evt, seg, d, c);
+      Key key = std::make_tuple(evt, d, c);
       auto it = eventMap.find(key);
 
       const std::vector<Long64_t> &entries = it->second;
-      for (size_t idx = 0; idx < entries.size(); idx++) {
-        tree->GetEntry(entries[idx]);
+      tree->GetEntry(entries.front());
 
-        std::string gname = Form("wf_evt%04d_seg%06d_det%02d_ch%02d_idx%zu",
-                                 evt, seg, d, c, idx);
-        std::string gtitle = Form("Event %d Seg %d Det %d Ch %d Idx %zu",
-                                  evt, seg, d, c, idx);
+      std::string gname = Form("wf_evt%04d_det%02d_ch%02d", evt, d, c);
+      std::string gtitle = Form("Event %d Det %d Ch %d", evt, d, c);
 
-        TGraph *g = makeGraph(wf, nsample, gname.c_str(), gtitle.c_str());
-        targetDir->cd();
-        g->Write();
-        total_tgraphs++;
+      TGraph *g = makeGraph(wf, nsample, gname.c_str(), gtitle.c_str());
+      targetDir->cd();
+      g->Write();
+      total_tgraphs++;
 
-        // Store idx0 for summary (only ch 0-7 for 2x4 grid)
-        if (idx == 0 && c < 8) {
-          summaryGraphs[c] = g;
+      if (c < 8) {
+        summaryGraphs[c] = g;
+      }
+
+      // Export individual graph image
+      if (export_pdf || export_png) {
+        TCanvas *gc = new TCanvas("gc", "", 800, 600);
+        g->Draw("AL");
+        if (export_pdf) {
+          exportToImage(gc, detImgPath + "/" + gname, "pdf");
         }
-
-        // Export individual graph image
-        if (export_pdf || export_png) {
-          std::string chImgPath = detImgPath + "/" + Form("ch_%02d", c);
-          createDirIfNotExists(chImgPath);
-
-          TCanvas *gc = new TCanvas("gc", "", 800, 600);
-          g->Draw("AL");
-          if (export_pdf) {
-            exportToImage(gc, chImgPath + "/" + gname, "pdf");
-          }
-          if (export_png) {
-            exportToImage(gc, chImgPath + "/" + gname, "png");
-          }
-          delete gc;
+        if (export_png) {
+          exportToImage(gc, detImgPath + "/" + gname, "png");
         }
+        delete gc;
       }
     }
 
-    // Create summary canvas (using idx0 graphs only)
+    // Create summary canvas (using channel graphs only)
     if (!summaryGraphs.empty()) {
-      std::string sname = Form("summary_evt%04d_seg%06d_det%02d", evt, seg, d);
-      std::string stitle = Form("Summary Event %d Seg %d Det %d", evt, seg, d);
+      std::string sname = Form("summary_evt%04d_det%02d", evt, d);
+      std::string stitle = Form("Summary Event %d Det %d", evt, d);
 
       TCanvas *summary = makeSummaryCanvas(summaryGraphs, sname.c_str(), stitle.c_str());
       targetDir->cd();
@@ -346,7 +328,7 @@ int main(int argc, char *argv[]) {
             << "  Events processed: " << selected_evtn.size() << " (unique evtn values)\n"
             << "  TTree entries scanned: " << nentries << "\n"
             << "  Entries skipped (invalid nsample): " << skipped_nsample << "\n"
-            << "  Unique (evt,seg,det,ch) keys: " << unique_keys << "\n"
+            << "  Unique (evt,det,ch) keys: " << unique_keys << "\n"
             << "  TGraph objects created: " << total_tgraphs << "\n"
             << "  Duplicate entries handled: " << duplicate_entries << "\n"
             << "  Summary canvases created: " << summary_canvases << "\n"

@@ -118,9 +118,9 @@ cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
 
 Output ROOT file directory hierarchy:
 
-- `evt_XXXX/seg_XXXXXX/det_XX/`
-- Graph name format: `wf_evt%04d_seg%06d_det%02d_ch%02d_idx%zu`
-- Summary canvas per detector group: `summary_evt%04d_seg%06d_det%02d`
+- `evt_XXXX/det_XX/`
+- Graph name format: `wf_evt%04d_det%02d_ch%02d`
+- Summary canvas per detector group: `summary_evt%04d_det%02d`
 
 ## Output Validation
 
