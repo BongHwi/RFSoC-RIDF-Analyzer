@@ -17,6 +17,20 @@ include(${ROOT_USE_FILE})
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+    find_path(NLOHMANN_JSON_INCLUDE_DIR
+        NAMES nlohmann/json.hpp
+        PATHS
+            /opt/homebrew/include
+            /usr/local/include
+            /usr/include
+    )
+    if(NOT NLOHMANN_JSON_INCLUDE_DIR)
+        message(FATAL_ERROR "nlohmann/json.hpp not found. Install nlohmann-json (e.g. brew install nlohmann-json).")
+    endif()
+endif()
+
 set(LIB_SOURCES
     src/ModuleAbst.cpp
     src/ModuleC16.cpp
@@ -63,7 +77,12 @@ target_include_directories(analyze_waveforms PRIVATE
     ${ROOT_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/include
 )
-target_link_libraries(analyze_waveforms ${ROOT_LIBRARIES})
+if(nlohmann_json_FOUND)
+    target_link_libraries(analyze_waveforms PRIVATE nlohmann_json::nlohmann_json)
+else()
+    target_include_directories(analyze_waveforms PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
+endif()
+target_link_libraries(analyze_waveforms PRIVATE ${ROOT_LIBRARIES})
 set_target_properties(analyze_waveforms PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
 )
