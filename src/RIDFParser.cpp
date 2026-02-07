@@ -51,7 +51,7 @@ int RIDFParser::file(const char *file){
     return -1;
   }
 
-  sprintf(fpath, "%s", file);
+  snprintf(fpath, sizeof(fpath), "%s", file);
 
   return 1;
 };
@@ -77,7 +77,7 @@ int RIDFParser::online(const char *host){
   gevtn = 0;
   gssz = 0;
 
-  sprintf(fpath, "%s", host);
+  snprintf(fpath, sizeof(fpath), "%s", host);
 
   puller = new RIDFPull(host);
   
@@ -112,9 +112,9 @@ int RIDFParser::close(void){
 char *RIDFParser::status(void){
   
   if(!gfd){
-    sprintf(gline, "ridf is not opened");
+    snprintf(gline, sizeof(gline), "ridf is not opened");
   }else{
-    sprintf(gline, "ridf %s", fpath);
+    snprintf(gline, sizeof(gline), "ridf %s", fpath);
   }
 
   return gline;
