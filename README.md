@@ -17,16 +17,14 @@ If ROOT is installed in a custom location, set one of:
 ## Project Layout
 
 ```
-waveana/
+RFSoC-RIDF-Analyzer/
 ├── CMakeLists.txt
 ├── include/        # headers
 ├── src/            # sources
 ├── lib/            # built shared library (generated)
 ├── bin/            # built executable (generated)
 ├── build/          # cmake build directory (generated)
-├── legacy/         # backups of old Makefile/macro (not for source distribution)
-├── docs/           # project docs (optional in source distribution)
-└── RESTRUCTURE_PLAN.md
+└── README.md
 ```
 
 ## Source Distribution Policy
@@ -35,13 +33,12 @@ This repository is managed for source-code distribution.
 
 - Track source and build configs: `CMakeLists.txt`, `include/`, `src/`, `README.md`
 - Exclude generated outputs: `build/`, `bin/`, `lib/`
-- Exclude non-runtime archives/docs for release bundles: `legacy/`, `docs/`
 - `.gitignore` already includes these exclusions
 
 ## Build
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
 mkdir -p build
 cd build
 cmake ..
@@ -51,7 +48,7 @@ cmake --build . -j$(nproc)
 With custom ROOT path:
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana/build
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer/build
 cmake -DROOT_DIR=/opt/root ..
 cmake --build . -j$(nproc)
 ```
@@ -61,22 +58,22 @@ cmake --build . -j$(nproc)
 ### Help
 
 ```bash
-/home/blim/epic/RFSoC/waveana/bin/rfsoc_ridf_analyzer --help
-/home/blim/epic/RFSoC/waveana/bin/export_waveforms --help
+/home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer/bin/rfsoc_ridf_analyzer --help
+/home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer/bin/export_waveforms --help
 ```
 
 ### Batch mode (recommended for servers)
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana
-./bin/rfsoc_ridf_analyzer -b -n 1000 ../data/data0005.ridf
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+./bin/rfsoc_ridf_analyzer -b -n 1000 data.ridf
 ```
 
 ### GUI mode
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana
-./bin/rfsoc_ridf_analyzer -n 1000 ../data/data0005.ridf
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
+./bin/rfsoc_ridf_analyzer -n 1000 data.ridf
 ```
 
 ### CLI options
@@ -97,14 +94,14 @@ cd /home/blim/epic/RFSoC/waveana
 ### Basic usage
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
 ./bin/export_waveforms rfsoc_ridf_analyzer_out.root
 ```
 
 ### Example with image export
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
 ./bin/export_waveforms rfsoc_ridf_analyzer_out.root -o waveforms.root --png -n 200
 ```
 
@@ -130,7 +127,7 @@ Output ROOT file directory hierarchy:
 Check ROOT output content:
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
 root -l -b -q -e 'TFile f("rfsoc_ridf_analyzer_out.root"); f.ls(); TTree *t=(TTree*)f.Get("wftree"); if(t) t->Print();'
 ```
 
@@ -145,7 +142,7 @@ Expected objects include:
 ## Clean/Rebuild
 
 ```bash
-cd /home/blim/epic/RFSoC/waveana
+cd /home/blim/epic/RFSoC/RFSoC-RIDF-Analyzer
 rm -rf build
 mkdir build && cd build
 cmake ..
@@ -155,4 +152,3 @@ cmake --build . -j$(nproc)
 ## Notes
 
 - Old ROOT macro workflow was migrated to executable `src/rfsoc_ridf_analyzer.cpp`.
-- Legacy files are preserved in `legacy/`.
