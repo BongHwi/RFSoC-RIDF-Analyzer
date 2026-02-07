@@ -29,7 +29,7 @@ void print_usage(const char *progname) {
   std::cout << "  -o, --output FILE    Output ROOT file (default: rfsoc_ridf_analyzer_out.root)" << std::endl;
   std::cout << "  -n, --maxevt N       Maximum events to process (default: 10000)" << std::endl;
   std::cout << "  -b, --batch          Run in batch mode (no GUI)" << std::endl;
-  std::cout << "  -a, --all            Draw all detectors in one monitor canvas (GUI only)" << std::endl;
+  std::cout << "  -a, --all            Draw all RFSoCs in one monitor canvas (GUI only)" << std::endl;
   std::cout << "                      GUI mode updates waveform monitor per event" << std::endl;
   std::cout << "                      (Enter: next event, q: quit monitor)" << std::endl;
   std::cout << "  -h, --help           Show this help message" << std::endl;
@@ -58,7 +58,7 @@ enum class MonitorLayoutMode {
 
 void ensure_det_monitor_objects(MonitorState &monitor, int det) {
   if (monitor.det_canvases.find(det) == monitor.det_canvases.end()) {
-    TCanvas *canvas = new TCanvas(Form("c_det%d", det), Form("Detector %d", det), 1200, 800);
+    TCanvas *canvas = new TCanvas(Form("c_det%d", det), Form("RFSoC %d", det), 1200, 800);
     canvas->Divide(4, 2);
     monitor.det_canvases[det] = canvas;
   }
@@ -75,7 +75,7 @@ void draw_no_data_pad(int det, int ch) {
   TLatex label;
   label.SetNDC(kTRUE);
   label.SetTextSize(0.08);
-  label.DrawLatex(0.28, 0.56, Form("det %d ch %d", det, ch));
+  label.DrawLatex(0.28, 0.56, Form("RFSoC %d ch %d", det, ch));
   label.DrawLatex(0.37, 0.40, "No data");
 }
 
@@ -87,12 +87,12 @@ void fill_det_channel_pad(MonitorState &monitor, int det, int ch, const Detector
 
     if (hist == nullptr) {
       hist = new TH1S(Form("h_wf_det%d_ch%d", det, ch),
-                      Form("det %d ch %d;Sample;ADC", det, ch), nsample, 0, nsample);
+                      Form("RFSoC %d ch %d;Sample;ADC", det, ch), nsample, 0, nsample);
     } else if (hist->GetNbinsX() != nsample) {
       hist->SetBins(nsample, 0, nsample);
     }
 
-    hist->SetTitle(Form("det %d ch %d;Sample;ADC", det, ch));
+    hist->SetTitle(Form("RFSoC %d ch %d;Sample;ADC", det, ch));
     hist->Reset();
     for (int i = 0; i < nsample; i++) {
       hist->SetBinContent(i + 1, samples[i]);
@@ -104,7 +104,7 @@ void fill_det_channel_pad(MonitorState &monitor, int det, int ch, const Detector
   }
 }
 
-void update_event_monitor_per_det(MonitorState &monitor, const EventWaveforms &event_waveforms) {
+void update_event_monitor_per_det(MonitorState &monitor, const EventWaveforms &event_waveforms, int evtn) {
   for (const auto &pair : event_waveforms) {
     monitor.known_det_ids.insert(pair.first);
   }
@@ -112,6 +112,7 @@ void update_event_monitor_per_det(MonitorState &monitor, const EventWaveforms &e
   for (int det : monitor.known_det_ids) {
     ensure_det_monitor_objects(monitor, det);
     TCanvas *canvas = monitor.det_canvases[det];
+    canvas->SetTitle(Form("RFSoC %d - Event %d", det, evtn));
 
     auto det_it = event_waveforms.find(det);
     const DetectorWaveforms *det_wfs = (det_it != event_waveforms.end()) ? &det_it->second : nullptr;
@@ -162,7 +163,7 @@ void rebuild_all_canvas_layout(MonitorState &monitor, int cols, int rows) {
     det_label.SetNDC(kTRUE);
     det_label.SetTextSize(0.6);
     det_label.SetTextAlign(22);
-    det_label.DrawLatex(0.5, 0.5, Form("Detector %d", det));
+    det_label.DrawLatex(0.5, 0.5, Form("RFSoC %d", det));
 
     outer_pad->cd();
     TPad *grid_pad = new TPad(Form("det%d_grid", det), "", 0.01, 0.02, 0.99, 0.86);
@@ -187,7 +188,40 @@ void rebuild_all_canvas_layout(MonitorState &monitor, int cols, int rows) {
   }
 }
 
-void update_event_monitor_all_canvas(MonitorState &monitor, const EventWaveforms &event_waveforms) {
+void redraw_all_canvas_headers(MonitorState &monitor, int evtn) {
+  if (monitor.known_det_ids.empty()) {
+    return;
+  }
+
+  const int first_det = *monitor.known_det_ids.begin();
+  for (int det : monitor.known_det_ids) {
+    auto header_it = monitor.all_det_header_pads.find(det);
+    if (header_it == monitor.all_det_header_pads.end() || header_it->second == nullptr) {
+      continue;
+    }
+
+    TPad *header_pad = header_it->second;
+    header_pad->cd();
+    header_pad->Clear();
+
+    TLatex det_label;
+    det_label.SetNDC(kTRUE);
+    det_label.SetTextSize(0.6);
+    det_label.SetTextAlign(22);
+    det_label.DrawLatex(0.5, 0.5, Form("RFSoC %d", det));
+
+    if (det == first_det) {
+      TLatex evt_label;
+      evt_label.SetNDC(kTRUE);
+      evt_label.SetTextSize(0.5);
+      evt_label.SetTextAlign(12);
+      evt_label.DrawLatex(0.02, 0.92, Form("Event %d", evtn));
+    }
+    header_pad->Modified();
+  }
+}
+
+void update_event_monitor_all_canvas(MonitorState &monitor, const EventWaveforms &event_waveforms, int evtn) {
   for (const auto &pair : event_waveforms) {
     monitor.known_det_ids.insert(pair.first);
     if (monitor.det_hists.find(pair.first) == monitor.det_hists.end()) {
@@ -206,7 +240,7 @@ void update_event_monitor_all_canvas(MonitorState &monitor, const EventWaveforms
   const int rows = static_cast<int>(std::ceil(static_cast<double>(ndet) / cols));
 
   if (monitor.all_canvas == nullptr) {
-    monitor.all_canvas = new TCanvas("c_all_det", "All Detectors", 1800, 1000);
+    monitor.all_canvas = new TCanvas("c_all_det", "All RFSoCs", 1800, 1000);
   }
 
   const bool need_layout_rebuild =
@@ -238,17 +272,18 @@ void update_event_monitor_all_canvas(MonitorState &monitor, const EventWaveforms
     }
   }
 
+  redraw_all_canvas_headers(monitor, evtn);
   monitor.all_canvas->Modified();
   monitor.all_canvas->Update();
   gSystem->ProcessEvents();
 }
 
 void update_event_monitor(MonitorState &monitor, const EventWaveforms &event_waveforms,
-                          MonitorLayoutMode layout_mode) {
+                          MonitorLayoutMode layout_mode, int evtn) {
   if (layout_mode == MonitorLayoutMode::AllDetSingleCanvas) {
-    update_event_monitor_all_canvas(monitor, event_waveforms);
+    update_event_monitor_all_canvas(monitor, event_waveforms, evtn);
   } else {
-    update_event_monitor_per_det(monitor, event_waveforms);
+    update_event_monitor_per_det(monitor, event_waveforms, evtn);
   }
 }
 
@@ -367,7 +402,7 @@ void run_analysis(const std::string &infile, int maxevt, const std::string &outf
     }
 
     if (enable_monitor) {
-      update_event_monitor(monitor_state, event_waveforms, layout_mode);
+      update_event_monitor(monitor_state, event_waveforms, layout_mode, evtn);
       if (!wait_for_monitor_input(shown_evt_count, evtn)) {
         stop_requested = true;
       }
