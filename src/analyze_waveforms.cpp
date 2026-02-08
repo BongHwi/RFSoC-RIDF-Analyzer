@@ -330,6 +330,7 @@ int main(int argc, char *argv[]) {
   Float_t out_peak_time_ns = -1.0f;
   Float_t out_cfd10 = -1.0f, out_cfd20 = -1.0f, out_cfd30 = -1.0f, out_cfd40 = -1.0f, out_cfd50 = -1.0f;
   Float_t out_cfd60 = -1.0f, out_cfd70 = -1.0f, out_cfd80 = -1.0f, out_cfd90 = -1.0f;
+  Float_t out_dcfd_time_ns = -1.0f;
   Float_t out_risetime = 0.0f;
   Bool_t out_valid = false;
 
@@ -351,6 +352,7 @@ int main(int argc, char *argv[]) {
   analysis_tree->Branch("cfd70", &out_cfd70, "cfd70/F");
   analysis_tree->Branch("cfd80", &out_cfd80, "cfd80/F");
   analysis_tree->Branch("cfd90", &out_cfd90, "cfd90/F");
+  analysis_tree->Branch("dcfd_time_ns", &out_dcfd_time_ns, "dcfd_time_ns/F");
   analysis_tree->Branch("risetime", &out_risetime, "risetime/F");
   analysis_tree->Branch("valid", &out_valid, "valid/O");
 
@@ -394,6 +396,7 @@ int main(int argc, char *argv[]) {
     out_cfd70 = result.cfd_times[6];
     out_cfd80 = result.cfd_times[7];
     out_cfd90 = result.cfd_times[8];
+    out_dcfd_time_ns = result.dcfd_time_ns;
     out_risetime = result.risetime;
     out_valid = result.valid;
     analysis_tree->Fill();

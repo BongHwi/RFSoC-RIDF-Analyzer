@@ -14,6 +14,10 @@ struct ConfigNode {
   std::optional<SignalPolarity> polarity;
   std::optional<int> baseline_start;
   std::optional<int> baseline_end;
+  std::optional<int> ma_window_size;
+  std::optional<bool> dcfd_enabled;
+  std::optional<int> dcfd_delay;
+  std::optional<double> dcfd_fraction;
 };
 
 struct DetectorConfigNode {
@@ -33,6 +37,10 @@ struct ResolvedAnalysisParams {
   SignalPolarity polarity = SignalPolarity::Negative;
   int baseline_start = 0;
   int baseline_end = 50;
+  int ma_window_size = 1;
+  bool dcfd_enabled = false;
+  int dcfd_delay = 3;
+  double dcfd_fraction = 0.3;
 };
 
 struct WaveformAnalysisResult {
@@ -41,6 +49,7 @@ struct WaveformAnalysisResult {
   float amplitude = 0.0f;
   int peak_sample = -1;
   float peak_time_ns = -1.0f;
+  float dcfd_time_ns = -1.0f;
   std::array<float, 9> cfd_times{};
   float risetime = 0.0f;
   bool valid = false;
