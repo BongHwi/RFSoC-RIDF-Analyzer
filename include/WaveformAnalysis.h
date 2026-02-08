@@ -17,6 +17,12 @@ struct ConfigNode {
   std::optional<int> ma_window_size;
   std::optional<bool> dcfd_enabled;
   std::optional<int> dcfd_delay;
+  std::optional<std::string> cfd_store_mode;
+  std::optional<std::string> dcfd_store_mode;
+  std::optional<int> cfd_target_percent;
+  std::optional<int> dcfd_target_percent;
+  std::optional<bool> store_cfd_array;
+  std::optional<bool> store_dcfd_array;
   std::optional<double> dcfd_fraction;
 };
 
@@ -40,7 +46,10 @@ struct ResolvedAnalysisParams {
   int ma_window_size = 1;
   bool dcfd_enabled = false;
   int dcfd_delay = 3;
-  double dcfd_fraction = 0.3;
+  std::string cfd_store_mode = "array";
+  std::string dcfd_store_mode = "single";
+  int cfd_target_percent = 50;
+  int dcfd_target_percent = 30;
 };
 
 struct WaveformAnalysisResult {
@@ -49,10 +58,17 @@ struct WaveformAnalysisResult {
   float amplitude = 0.0f;
   int peak_sample = -1;
   float peak_time_ns = -1.0f;
+  float cfd_time_ns = -1.0f;
   float dcfd_time_ns = -1.0f;
   std::array<float, 9> cfd_times{};
+  std::array<float, 9> dcfd_times{};
   float risetime = 0.0f;
   bool valid = false;
+
+  WaveformAnalysisResult() {
+    cfd_times.fill(-1.0f);
+    dcfd_times.fill(-1.0f);
+  }
 };
 
 AnalysisConfig makeDefaultAnalysisConfig();

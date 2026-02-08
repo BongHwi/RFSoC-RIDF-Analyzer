@@ -328,9 +328,13 @@ int main(int argc, char *argv[]) {
   Float_t out_baseline = 0.0f, out_baseline_rms = 0.0f, out_amplitude = 0.0f;
   Int_t out_peak_sample = -1;
   Float_t out_peak_time_ns = -1.0f;
+  Float_t out_cfd_time_ns = -1.0f;
   Float_t out_cfd10 = -1.0f, out_cfd20 = -1.0f, out_cfd30 = -1.0f, out_cfd40 = -1.0f, out_cfd50 = -1.0f;
   Float_t out_cfd60 = -1.0f, out_cfd70 = -1.0f, out_cfd80 = -1.0f, out_cfd90 = -1.0f;
   Float_t out_dcfd_time_ns = -1.0f;
+  Float_t out_dcfd10 = -1.0f, out_dcfd20 = -1.0f, out_dcfd30 = -1.0f, out_dcfd40 = -1.0f,
+          out_dcfd50 = -1.0f;
+  Float_t out_dcfd60 = -1.0f, out_dcfd70 = -1.0f, out_dcfd80 = -1.0f, out_dcfd90 = -1.0f;
   Float_t out_risetime = 0.0f;
   Bool_t out_valid = false;
 
@@ -343,6 +347,7 @@ int main(int argc, char *argv[]) {
   analysis_tree->Branch("amplitude", &out_amplitude, "amplitude/F");
   analysis_tree->Branch("peak_sample", &out_peak_sample, "peak_sample/I");
   analysis_tree->Branch("peak_time_ns", &out_peak_time_ns, "peak_time_ns/F");
+  analysis_tree->Branch("cfd_time_ns", &out_cfd_time_ns, "cfd_time_ns/F");
   analysis_tree->Branch("cfd10", &out_cfd10, "cfd10/F");
   analysis_tree->Branch("cfd20", &out_cfd20, "cfd20/F");
   analysis_tree->Branch("cfd30", &out_cfd30, "cfd30/F");
@@ -353,6 +358,15 @@ int main(int argc, char *argv[]) {
   analysis_tree->Branch("cfd80", &out_cfd80, "cfd80/F");
   analysis_tree->Branch("cfd90", &out_cfd90, "cfd90/F");
   analysis_tree->Branch("dcfd_time_ns", &out_dcfd_time_ns, "dcfd_time_ns/F");
+  analysis_tree->Branch("dcfd10", &out_dcfd10, "dcfd10/F");
+  analysis_tree->Branch("dcfd20", &out_dcfd20, "dcfd20/F");
+  analysis_tree->Branch("dcfd30", &out_dcfd30, "dcfd30/F");
+  analysis_tree->Branch("dcfd40", &out_dcfd40, "dcfd40/F");
+  analysis_tree->Branch("dcfd50", &out_dcfd50, "dcfd50/F");
+  analysis_tree->Branch("dcfd60", &out_dcfd60, "dcfd60/F");
+  analysis_tree->Branch("dcfd70", &out_dcfd70, "dcfd70/F");
+  analysis_tree->Branch("dcfd80", &out_dcfd80, "dcfd80/F");
+  analysis_tree->Branch("dcfd90", &out_dcfd90, "dcfd90/F");
   analysis_tree->Branch("risetime", &out_risetime, "risetime/F");
   analysis_tree->Branch("valid", &out_valid, "valid/O");
 
@@ -387,6 +401,7 @@ int main(int argc, char *argv[]) {
     out_amplitude = result.amplitude;
     out_peak_sample = result.peak_sample;
     out_peak_time_ns = result.peak_time_ns;
+    out_cfd_time_ns = result.cfd_time_ns;
     out_cfd10 = result.cfd_times[0];
     out_cfd20 = result.cfd_times[1];
     out_cfd30 = result.cfd_times[2];
@@ -397,6 +412,15 @@ int main(int argc, char *argv[]) {
     out_cfd80 = result.cfd_times[7];
     out_cfd90 = result.cfd_times[8];
     out_dcfd_time_ns = result.dcfd_time_ns;
+    out_dcfd10 = result.dcfd_times[0];
+    out_dcfd20 = result.dcfd_times[1];
+    out_dcfd30 = result.dcfd_times[2];
+    out_dcfd40 = result.dcfd_times[3];
+    out_dcfd50 = result.dcfd_times[4];
+    out_dcfd60 = result.dcfd_times[5];
+    out_dcfd70 = result.dcfd_times[6];
+    out_dcfd80 = result.dcfd_times[7];
+    out_dcfd90 = result.dcfd_times[8];
     out_risetime = result.risetime;
     out_valid = result.valid;
     analysis_tree->Fill();
@@ -413,8 +437,9 @@ int main(int argc, char *argv[]) {
       const std::string cname =
           Form("canvas_evt%04d_det%02d_ch%02d", key.evtn, key.det, key.ch);
       const std::string ctitle =
-          Form("Evt %d Det %d Ch %d | amp=%.2f cfd50=%.2fns valid=%d", key.evtn, key.det, key.ch,
-               result.amplitude, result.cfd_times[4], static_cast<int>(result.valid));
+          Form("Evt %d Det %d Ch %d | amp=%.2f cfd%d=%.2fns valid=%d", key.evtn, key.det, key.ch,
+               result.amplitude, params.cfd_target_percent, result.cfd_time_ns,
+               static_cast<int>(result.valid));
       TCanvas *c = buildWaveformCanvas(wf, nsample, params, result, cname, ctitle);
       c->Write();
       saved_canvases++;

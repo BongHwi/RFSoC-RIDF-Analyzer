@@ -140,6 +140,47 @@ Expected objects include:
 - `h_amplitude`
 - `h_nsample`
 
+## Analyze Waveforms Config
+
+`analyze_waveforms` supports fixed output schema for CFD/DCFD timing:
+
+- Always written branches:
+  - `cfd_time_ns`, `dcfd_time_ns`
+  - `cfd10..cfd90`, `dcfd10..dcfd90`
+- In single mode, array branches are filled with `-1.0`.
+
+Example config:
+
+```json
+{
+  "global": {
+    "dcfd_enabled": true,
+    "cfd_store_mode": "single",
+    "dcfd_store_mode": "array",
+    "cfd_target_percent": 70,
+    "dcfd_target_percent": 30
+  },
+  "detectors": {
+    "default": { "enabled": true }
+  }
+}
+```
+
+Supported keys:
+
+- `cfd_store_mode`: `"array"` (default), `"single"`
+- `dcfd_store_mode`: `"single"` (default), `"array"`
+- `cfd_target_percent`: `10,20,...,90` (default `50`)
+- `dcfd_target_percent`: `10,20,...,90` (default `30`)
+- `dcfd_enabled`: `true/false` (default `false`)
+
+Legacy compatibility:
+
+- `store_cfd_array` and `store_dcfd_array` are mapped to `*_store_mode` if new keys are absent.
+- `dcfd_fraction` is converted to nearest-10 percent and used as `dcfd_target_percent` if new key is absent.
+- If both legacy and new keys are present in the same scope, new keys win and a warning is printed.
+- Hierarchy remains: `channel > detector > detectors.default > global`.
+
 ## Clean/Rebuild
 
 ```bash

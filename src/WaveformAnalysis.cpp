@@ -1,6 +1,7 @@
 #include "WaveformAnalysis.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -21,8 +22,23 @@ SignalPolarity parsePolarity(const std::string &value) {
   return SignalPolarity::Negative;
 }
 
+std::string normalizeStoreMode(const std::string &value) {
+  std::string out = value;
+  std::transform(out.begin(), out.end(), out.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return out;
+}
+
 std::string polarityToString(SignalPolarity polarity) {
   return (polarity == SignalPolarity::Positive) ? "positive" : "negative";
+}
+
+bool isValidTargetPercent(int percent) { return (percent >= 10) && (percent <= 90) && ((percent % 10) == 0); }
+
+double percentToFraction(int percent) { return static_cast<double>(percent) / 100.0; }
+
+int fractionToNearestPercent10(double fraction) {
+  return static_cast<int>(std::lround(fraction * 10.0) * 10);
 }
 
 void parseConfigNode(const json &node, ConfigNode &cfg_node, const std::string &context = "global") {
@@ -90,6 +106,80 @@ void parseConfigNode(const json &node, ConfigNode &cfg_node, const std::string &
       std::cerr << "Warning [" << context << "]: dcfd_delay must be integer, using default\n";
     }
   }
+  if (node.contains("cfd_store_mode")) {
+    const auto &v = node.at("cfd_store_mode");
+    if (v.is_string()) {
+      const std::string mode = normalizeStoreMode(v.get<std::string>());
+      if (mode != "array" && mode != "single") {
+        std::cerr << "Warning [" << context << "]: invalid cfd_store_mode (" << v.get<std::string>()
+                  << "), fallback to array\n";
+        cfg_node.cfd_store_mode = "array";
+      } else {
+        cfg_node.cfd_store_mode = mode;
+      }
+    } else {
+      std::cerr << "Warning [" << context << "]: cfd_store_mode must be string, using default\n";
+    }
+  }
+  if (node.contains("dcfd_store_mode")) {
+    const auto &v = node.at("dcfd_store_mode");
+    if (v.is_string()) {
+      const std::string mode = normalizeStoreMode(v.get<std::string>());
+      if (mode != "array" && mode != "single") {
+        std::cerr << "Warning [" << context << "]: invalid dcfd_store_mode (" << v.get<std::string>()
+                  << "), fallback to single\n";
+        cfg_node.dcfd_store_mode = "single";
+      } else {
+        cfg_node.dcfd_store_mode = mode;
+      }
+    } else {
+      std::cerr << "Warning [" << context << "]: dcfd_store_mode must be string, using default\n";
+    }
+  }
+  if (node.contains("cfd_target_percent")) {
+    const auto &v = node.at("cfd_target_percent");
+    if (v.is_number_integer()) {
+      int percent = v.get<int>();
+      if (!isValidTargetPercent(percent)) {
+        std::cerr << "Warning [" << context << "]: invalid cfd_target_percent (" << percent
+                  << "), fallback to 50\n";
+        percent = 50;
+      }
+      cfg_node.cfd_target_percent = percent;
+    } else {
+      std::cerr << "Warning [" << context << "]: cfd_target_percent must be integer, using default\n";
+    }
+  }
+  if (node.contains("dcfd_target_percent")) {
+    const auto &v = node.at("dcfd_target_percent");
+    if (v.is_number_integer()) {
+      int percent = v.get<int>();
+      if (!isValidTargetPercent(percent)) {
+        std::cerr << "Warning [" << context << "]: invalid dcfd_target_percent (" << percent
+                  << "), fallback to 30\n";
+        percent = 30;
+      }
+      cfg_node.dcfd_target_percent = percent;
+    } else {
+      std::cerr << "Warning [" << context << "]: dcfd_target_percent must be integer, using default\n";
+    }
+  }
+  if (node.contains("store_cfd_array")) {
+    const auto &v = node.at("store_cfd_array");
+    if (v.is_boolean()) {
+      cfg_node.store_cfd_array = v.get<bool>();
+    } else {
+      std::cerr << "Warning [" << context << "]: store_cfd_array must be boolean, using default\n";
+    }
+  }
+  if (node.contains("store_dcfd_array")) {
+    const auto &v = node.at("store_dcfd_array");
+    if (v.is_boolean()) {
+      cfg_node.store_dcfd_array = v.get<bool>();
+    } else {
+      std::cerr << "Warning [" << context << "]: store_dcfd_array must be boolean, using default\n";
+    }
+  }
   if (node.contains("dcfd_fraction")) {
     const auto &v = node.at("dcfd_fraction");
     if (v.is_number()) {
@@ -97,6 +187,19 @@ void parseConfigNode(const json &node, ConfigNode &cfg_node, const std::string &
     } else {
       std::cerr << "Warning [" << context << "]: dcfd_fraction must be number, using default\n";
     }
+  }
+
+  if (cfg_node.cfd_store_mode.has_value() && cfg_node.store_cfd_array.has_value()) {
+    std::cerr << "Warning [" << context
+              << "]: both cfd_store_mode and store_cfd_array specified; cfd_store_mode takes precedence\n";
+  }
+  if (cfg_node.dcfd_store_mode.has_value() && cfg_node.store_dcfd_array.has_value()) {
+    std::cerr << "Warning [" << context
+              << "]: both dcfd_store_mode and store_dcfd_array specified; dcfd_store_mode takes precedence\n";
+  }
+  if (cfg_node.dcfd_target_percent.has_value() && cfg_node.dcfd_fraction.has_value()) {
+    std::cerr << "Warning [" << context
+              << "]: both dcfd_target_percent and dcfd_fraction specified; dcfd_target_percent takes precedence\n";
   }
 }
 
@@ -125,8 +228,23 @@ void applyNode(const ConfigNode &node, ResolvedAnalysisParams &params) {
   if (node.dcfd_delay.has_value()) {
     params.dcfd_delay = node.dcfd_delay.value();
   }
-  if (node.dcfd_fraction.has_value()) {
-    params.dcfd_fraction = node.dcfd_fraction.value();
+  if (node.cfd_store_mode.has_value()) {
+    params.cfd_store_mode = node.cfd_store_mode.value();
+  } else if (node.store_cfd_array.has_value()) {
+    params.cfd_store_mode = node.store_cfd_array.value() ? "array" : "single";
+  }
+  if (node.dcfd_store_mode.has_value()) {
+    params.dcfd_store_mode = node.dcfd_store_mode.value();
+  } else if (node.store_dcfd_array.has_value()) {
+    params.dcfd_store_mode = node.store_dcfd_array.value() ? "array" : "single";
+  }
+  if (node.cfd_target_percent.has_value()) {
+    params.cfd_target_percent = node.cfd_target_percent.value();
+  }
+  if (node.dcfd_target_percent.has_value()) {
+    params.dcfd_target_percent = node.dcfd_target_percent.value();
+  } else if (node.dcfd_fraction.has_value()) {
+    params.dcfd_target_percent = fractionToNearestPercent10(node.dcfd_fraction.value());
   }
 }
 
@@ -145,12 +263,21 @@ bool sanitizeAnalysisParams(ResolvedAnalysisParams &params) {
     params.dcfd_delay = 1;
   }
 
-  constexpr double kFractionMin = 0.01;
-  constexpr double kFractionMax = 0.99;
-  if (params.dcfd_fraction < kFractionMin) {
-    params.dcfd_fraction = kFractionMin;
-  } else if (params.dcfd_fraction > kFractionMax) {
-    params.dcfd_fraction = kFractionMax;
+  params.cfd_store_mode = normalizeStoreMode(params.cfd_store_mode);
+  if (params.cfd_store_mode != "array" && params.cfd_store_mode != "single") {
+    params.cfd_store_mode = "array";
+  }
+
+  params.dcfd_store_mode = normalizeStoreMode(params.dcfd_store_mode);
+  if (params.dcfd_store_mode != "array" && params.dcfd_store_mode != "single") {
+    params.dcfd_store_mode = "single";
+  }
+
+  if (!isValidTargetPercent(params.cfd_target_percent)) {
+    params.cfd_target_percent = 50;
+  }
+  if (!isValidTargetPercent(params.dcfd_target_percent)) {
+    params.dcfd_target_percent = 30;
   }
 
   return true;
@@ -290,9 +417,12 @@ bool writeTemplateConfig(const std::string &path, std::string *error_message) {
       {"baseline_start", 0},
       {"baseline_end", 50},
       {"ma_window_size", 1},
+      {"cfd_store_mode", "array"},
+      {"dcfd_store_mode", "single"},
+      {"cfd_target_percent", 50},
+      {"dcfd_target_percent", 30},
       {"dcfd_enabled", false},
       {"dcfd_delay", 3},
-      {"dcfd_fraction", 0.3},
   };
   j["detectors"]["default"] = {
       {"enabled", true},
@@ -407,7 +537,10 @@ ResolvedAnalysisParams resolveAnalysisParams(const AnalysisConfig &config, int d
   params.ma_window_size = 1;
   params.dcfd_enabled = false;
   params.dcfd_delay = 3;
-  params.dcfd_fraction = 0.3;
+  params.cfd_store_mode = "array";
+  params.dcfd_store_mode = "single";
+  params.cfd_target_percent = 50;
+  params.dcfd_target_percent = 30;
 
   applyNode(config.global, params);
   applyNode(config.default_detector, params);
@@ -431,7 +564,7 @@ bool validateBaselineRange(const ResolvedAnalysisParams &params, int nsample) {
 
 WaveformAnalysisResult analyzeWaveform(const short *wf, int nsample, const ResolvedAnalysisParams &params) {
   WaveformAnalysisResult out;
-  out.cfd_times.fill(-1.0f);
+  out.cfd_time_ns = -1.0f;
   out.dcfd_time_ns = -1.0f;
   out.risetime = quietNaN();
 
@@ -488,16 +621,29 @@ WaveformAnalysisResult analyzeWaveform(const short *wf, int nsample, const Resol
     return out;
   }
 
-  static constexpr std::array<int, 9> kCFDPercents = {10, 20, 30, 40, 50, 60, 70, 80, 90};
-  for (size_t i = 0; i < kCFDPercents.size(); i++) {
-    const double threshold = amplitude * (static_cast<double>(kCFDPercents[i]) / 100.0);
-    out.cfd_times[i] = computeCFDTime(normalized, peak_idx, threshold, safe_params.sample_rate_ns);
+  static constexpr std::array<int, 9> kPercents = {10, 20, 30, 40, 50, 60, 70, 80, 90};
+  if (safe_params.cfd_store_mode == "array") {
+    for (size_t i = 0; i < kPercents.size(); i++) {
+      const double threshold = amplitude * percentToFraction(kPercents[i]);
+      out.cfd_times[i] = computeCFDTime(normalized, peak_idx, threshold, safe_params.sample_rate_ns);
+    }
+    out.cfd_time_ns = out.cfd_times[static_cast<size_t>((safe_params.cfd_target_percent / 10) - 1)];
+  } else {
+    const double threshold = amplitude * percentToFraction(safe_params.cfd_target_percent);
+    out.cfd_time_ns = computeCFDTime(normalized, peak_idx, threshold, safe_params.sample_rate_ns);
   }
 
   if (safe_params.dcfd_enabled && peak_idx > 0) {
     out.dcfd_time_ns =
         computeDCFDTime(normalized, safe_params.baseline_end, peak_idx, safe_params.dcfd_delay,
-                        safe_params.dcfd_fraction, safe_params.sample_rate_ns);
+                        percentToFraction(safe_params.dcfd_target_percent), safe_params.sample_rate_ns);
+    if (safe_params.dcfd_store_mode == "array") {
+      for (size_t i = 0; i < kPercents.size(); i++) {
+        out.dcfd_times[i] = computeDCFDTime(normalized, safe_params.baseline_end, peak_idx,
+                                            safe_params.dcfd_delay, percentToFraction(kPercents[i]),
+                                            safe_params.sample_rate_ns);
+      }
+    }
   }
 
   const float cfd10 = out.cfd_times[0];
