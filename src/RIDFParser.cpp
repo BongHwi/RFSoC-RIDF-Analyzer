@@ -1,10 +1,6 @@
 #include "RIDFParser.h"
 #include "ridf.h"
-#include "ModuleV7XX.h"
-#include "ModuleMADC.h"
-#include "ModuleFIT.h"
 #include "ModuleC16.h"
-#include "ModuleV1290.h"
 #include <TObject.h>
 #include <stdio.h>
 #include <string.h>
@@ -367,18 +363,6 @@ int RIDFParser::nextseg(int *segid){
   switch(mod){
   case 0:
     decoder = new ModuleC16();
-    break;
-  case 21:
-    decoder = new ModuleV7XX();
-    break;
-  case 25:
-    decoder = new ModuleV1290();
-    break;
-  case 32:
-    decoder = new ModuleMADC();
-    break;
-  case 47:
-    decoder = new ModuleFIT();
     break;
   default:
     decoder = NULL;

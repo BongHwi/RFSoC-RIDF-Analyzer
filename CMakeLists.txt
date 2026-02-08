@@ -34,18 +34,13 @@ endif()
 set(LIB_SOURCES
     src/ModuleAbst.cpp
     src/ModuleC16.cpp
-    src/ModuleMADC.cpp
-    src/ModuleV7XX.cpp
-    src/ModuleV1290.cpp
-    src/ModuleFIT.cpp
     src/RIDFParser.cpp
     src/RIDFPull.cpp
 )
 
 ROOT_GENERATE_DICTIONARY(G__ridfana
     RIDFParser.h RIDFPull.h
-    ModuleAbst.h ModuleMADC.h ModuleV7XX.h
-    ModuleFIT.h ModuleC16.h ModuleV1290.h
+    ModuleAbst.h ModuleC16.h
     LINKDEF ${CMAKE_SOURCE_DIR}/include/LinkDef.h
     OPTIONS -I${CMAKE_SOURCE_DIR}/include
 )
