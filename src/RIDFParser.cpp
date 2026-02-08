@@ -20,6 +20,26 @@ RIDFParser::RIDFParser(){
 };
 
 RIDFParser::~RIDFParser(){
+  if(gfd){
+    fclose(gfd);
+    gfd = NULL;
+  }
+  if(puller){
+    delete puller;
+    puller = NULL;
+  }
+  if(gbuff){
+    free(gbuff);
+    gbuff = NULL;
+  }
+  if(seglist){
+    free(seglist);
+    seglist = NULL;
+  }
+  if(decoder){
+    delete decoder;
+    decoder = NULL;
+  }
 }
 
 void RIDFParser::test(){
@@ -28,10 +48,12 @@ void RIDFParser::test(){
 int RIDFParser::file(const char *file){
   if(gfd){
     fclose(gfd);
+    gfd = NULL;
   }
 
   if(puller){
     delete puller;
+    puller = NULL;
   }
 
   if(!gbuff){
@@ -59,10 +81,12 @@ int RIDFParser::file(const char *file){
 int RIDFParser::online(const char *host){
   if(gfd){
     fclose(gfd);
+    gfd = NULL;
   }
 
   if(puller){
     delete puller;
+    puller = NULL;
   }
 
   if(!gbuff){
@@ -101,12 +125,18 @@ int RIDFParser::rewindfile(void){
 }
 
 int RIDFParser::close(void){
+  int ret = 0;
   if(gfd){
     fclose(gfd);
-    return 1;
+    gfd = NULL;
+    ret = 1;
   }
-
-  return 0;
+  if(puller){
+    delete puller;
+    puller = NULL;
+    ret = 1;
+  }
+  return ret;
 }
 
 char *RIDFParser::status(void){

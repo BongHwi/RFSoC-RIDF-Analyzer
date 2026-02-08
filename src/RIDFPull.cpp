@@ -53,6 +53,7 @@ int RIDFPull::mktcpsend(char *host, unsigned short port){
 
   if((thp = gethostbyname(host)) == NULL){
     printf("bi-tcp.mktcpsend : No such host (%s)\n", host);
+    close(tsock);  // 소켓 FD 누수 방지
     return 0;
   }
 
